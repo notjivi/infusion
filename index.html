@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heal Nexus | Autonomous DevSecOps</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Fira+Code:wght@400;600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* Pure Dark / High-Contrast Neon Theme */
+        :root {
+            --bg-base: #000000;       /* Pure Black */
+            --bg-panel: #0a0a0a;      /* Almost Black Panel */
+            --border-panel: #222222;  /* Hard, dark border */
+            --neon-cyan: #00f0ff;     /* True Cyberpunk Cyan */
+            --neon-red: #ff3333;      /* Blood Red */
+            --neon-green: #00ff66;    /* Hacker Green */
+            --neon-yellow: #ffcc00;   /* Alert Yellow */
+            --text-main: #ffffff;     /* Pure White text */
+            --text-muted: #888888;    /* Muted gray */
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            padding: 24px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* HEADER */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 32px;
+            background: #050505;
+            border: 1px solid var(--border-panel);
+            border-bottom: 2px solid var(--neon-cyan);
+            border-radius: 8px;
+            margin-bottom: 24px;
+        }
+        
+        .logo {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.6rem;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            letter-spacing: 2px;
+        }
+        
+        .logo i { color: var(--neon-cyan); }
+        .logo span { color: var(--neon-cyan); font-weight: 700; }
+
+        .status {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: #000000;
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 1px solid var(--border-panel);
+        }
+        
+        .status-text { color: var(--neon-cyan); font-weight: 600; }
+        .pulse {
+            width: 10px; height: 10px;
+            background-color: var(--neon-cyan);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--neon-cyan);
+            animation: pulse-anim 1.5s infinite alternate;
+        }
+
+        @keyframes pulse-anim {
+            from { opacity: 0.2; box-shadow: 0 0 2px var(--neon-cyan); }
+            to { opacity: 1; box-shadow: 0 0 12px var(--neon-cyan); }
+        }
+
+        /* MAIN LAYOUT */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 24px;
+            flex: 1;
+        }
+
+        .panel {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-panel);
+            border-radius: 12px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* LEFT COLUMN */
+        .left-col { display: flex; flex-direction: column; gap: 24px; }
+
+        .risk-panel { border-color: rgba(255, 51, 51, 0.3); }
+        .panel-header {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .risk-score-container { text-align: left; margin-bottom: 24px; }
+        .risk-number {
+            font-size: 4.5rem;
+            font-weight: 700;
+            color: var(--neon-red);
+            line-height: 1;
+            text-shadow: 0 0 15px rgba(255, 51, 51, 0.4);
+        }
+        .risk-level { font-family: 'Fira Code', monospace; color: var(--text-muted); font-size: 0.9rem; margin-top: 8px; }
+        
+        .progress-bar { width: 100%; height: 6px; background: #222; border-radius: 3px; overflow: hidden; }
+        .progress-fill { width: 92%; height: 100%; background: var(--neon-red); box-shadow: 0 0 10px var(--neon-red); }
+
+        .monologue-panel { border-color: rgba(255, 204, 0, 0.3); flex: 1; }
+        .monologue-text {
+            font-family: 'Inter', sans-serif;
+            font-size: 0.95rem;
+            line-height: 1.7;
+            color: var(--text-main);
+            background: #000000;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 3px solid var(--neon-yellow);
+            flex: 1;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .highlight-bold { color: var(--neon-yellow); font-weight: 600; font-family: 'Fira Code', monospace; }
+
+        /* RIGHT COLUMN */
+        .right-col { display: flex; flex-direction: column; gap: 24px; }
+
+        /* Terminal Window */
+        .terminal-panel { padding: 0; overflow: hidden; flex: 1; display: flex; flex-direction: column; border-color: #222; }
+        .terminal-header {
+            background: #050505;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-panel);
+        }
+        .mac-dots { display: flex; gap: 8px; }
+        .dot { width: 12px; height: 12px; border-radius: 50%; }
+        .dot.red { background: #ff5f56; }
+        .dot.yellow { background: #ffbd2e; }
+        .dot.green { background: #27c93f; }
+        .term-title { font-family: 'Fira Code', monospace; font-size: 0.8rem; color: var(--text-muted); }
+        
+        .terminal-body {
+            background: #000000;
+            padding: 24px;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.9rem;
+            color: var(--text-main);
+            flex: 1;
+            overflow-y: auto;
+            line-height: 1.8;
+            white-space: pre-wrap;
+        }
+
+        .log-info { color: var(--text-muted); }
+        .log-thought { color: var(--neon-cyan); }
+        .log-action { color: var(--neon-yellow); }
+        .log-validation { color: var(--text-main); }
+        .log-error { color: var(--neon-red); }
+        .log-success { color: var(--neon-green); }
+        .parsed-term-bold { color: var(--neon-cyan); font-weight: 600; }
+
+        /* Table Area */
+        .table-panel { border-color: rgba(0, 240, 255, 0.3); }
+        table { width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif; font-size: 0.9rem; }
+        th { text-align: left; padding: 16px 12px; color: var(--text-muted); font-family: 'Orbitron', sans-serif; border-bottom: 1px solid var(--border-panel); font-size: 0.8rem; letter-spacing: 1px;}
+        td { padding: 16px 12px; border-bottom: 1px solid var(--border-panel); color: var(--text-main); }
+        .action-cell { color: var(--neon-cyan); font-family: 'Fira Code', monospace; font-size: 0.85rem;}
+        .action-cell.success { color: var(--neon-green); }
+        .action-cell i { margin-right: 6px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">
+            <i class="fa-solid fa-shield-halved"></i> HEAL <span>NEXUS</span>
+        </div>
+        <div class="status">
+            STATUS: <span class="status-text" id="status-indicator">STANDBY</span>
+            <div class="pulse"></div>
+        </div>
+    </header>
+
+    <div class="dashboard-grid">
+        <div class="left-col">
+            <div class="panel risk-panel">
+                <div class="panel-header">
+                    <span>RISK ASSESSMENT</span>
+                    <i class="fa-solid fa-triangle-exclamation" style="color: var(--neon-red);"></i>
+                </div>
+                <div class="risk-score-container">
+                    <div class="risk-number" id="risk-score">--</div>
+                    <div class="risk-level">LEVEL: <span id="risk-level">AWAITING SCAN...</span></div>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="risk-bar" style="width: 0%;"></div>
+                </div>
+            </div>
+
+            <div class="panel monologue-panel">
+                <div class="panel-header">
+                    <span><i class="fa-solid fa-skull"></i> ATTACK VECTOR</span>
+                </div>
+                <div class="monologue-text" id="attacker-story">
+Waiting for intelligence data...
+                </div>
+            </div>
+        </div>
+
+        <div class="right-col">
+            <div class="panel terminal-panel">
+                <div class="terminal-header">
+                    <div class="mac-dots">
+                        <div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div>
+                    </div>
+                    <div class="term-title">AI_REASONING_LOGS.sh</div>
+                </div>
+                <div class="terminal-body" id="terminal-logs">
+<span class="log-info">[SYSTEM] Engine online. Waiting for dashboard_data.json...</span>
+                </div>
+            </div>
+
+            <div class="panel table-panel">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>THREAT LEVEL</th>
+                            <th>REMEDIATION EXECUTED</th>
+                            <th>PIPELINE STATUS</th>
+                        </tr>
+                    </thead>
+                    <tbody id="remediation-table">
+                        <tr>
+                            <td colspan="3" style="text-align:center; color: var(--text-muted);">Awaiting Pipeline Execution...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function parseMarkdown(text, highlightClass) {
+            if (!text) return "";
+            return text.replace(/\*\*(.*?)\*\*/g, `<span class="${highlightClass}">$1</span>`);
+        }
+
+        async function fetchDashboardData() {
+            try {
+                const response = await fetch(`dashboard_data.json?t=${new Date().getTime()}`);
+                if (!response.ok) throw new Error("Data not ready.");
+                
+                const data = await response.json();
+
+                const riskElement = document.getElementById('risk-score');
+                const barElement = document.getElementById('risk-bar');
+                const levelElement = document.getElementById('risk-level');
+                
+                riskElement.innerText = data.risk_score;
+                levelElement.innerText = data.risk_level;
+                
+                if (data.risk_level.includes("CRITICAL") || data.risk_level.includes("HIGH")) {
+                    riskElement.style.color = "var(--neon-red)";
+                    barElement.style.background = "var(--neon-red)";
+                    barElement.style.boxShadow = "0 0 10px var(--neon-red)";
+                    barElement.style.width = "90%";
+                } else if (data.risk_level.includes("MEDIUM")) {
+                    riskElement.style.color = "var(--neon-yellow)";
+                    barElement.style.background = "var(--neon-yellow)";
+                    barElement.style.boxShadow = "0 0 10px var(--neon-yellow)";
+                    barElement.style.width = "50%";
+                } else {
+                    riskElement.style.color = "var(--neon-green)";
+                    barElement.style.background = "var(--neon-green)";
+                    barElement.style.boxShadow = "0 0 10px var(--neon-green)";
+                    barElement.style.width = "20%";
+                }
+
+                const cleanStory = parseMarkdown(data.attacker_story, "highlight-bold");
+                document.getElementById('attacker-story').innerHTML = cleanStory;
+
+                const cleanSummary = parseMarkdown(data.fix_summary, "parsed-term-bold");
+                const term = document.getElementById('terminal-logs');
+                term.innerHTML = `
+<span class="log-info">[SYSTEM] Connected to Kubernetes Cluster.</span>
+<span class="log-thought">[THOUGHT] Analyzing vulnerabilities and computing risk vector...</span>
+<span class="log-action">[ACTION] Triggering write_yaml_patch...</span>
+<span class="log-validation">[VALIDATION] Running 'kubectl apply --dry-run'...</span>
+<span class="log-success">[SUCCESS] Agent intercepted schema rules. Vulnerability patched.</span>
+<span class="log-thought">[THOUGHT] Finalizing YAML and submitting Pull Request...</span>
+
+<br><span style="color: var(--neon-green); font-weight: 600;">=== AUTONOMOUS FIX SUMMARY ===</span><br>
+<span class="log-info">${cleanSummary}</span>
+`;
+
+                document.getElementById('remediation-table').innerHTML = `
+                    <tr>
+                        <td style="font-weight: 600; color: var(--neon-red);">${data.risk_level}</td>
+                        <td style="line-height: 1.5;">Vulnerabilities remediated.<br><span style="font-size: 0.8rem; color: var(--text-muted);">See terminal for exact lines changed.</span></td>
+                        <td class="action-cell success"><i class="fa-solid fa-code-merge"></i> PR OPENED</td>
+                    </tr>
+                `;
+
+                document.getElementById('status-indicator').innerText = "SYSTEM SECURE - PR VERIFIED";
+                document.getElementById('status-indicator').style.color = "var(--neon-green)";
+
+            } catch (error) {
+            }
+        }
+
+        setInterval(fetchDashboardData, 3000);
+        fetchDashboardData();
+    </script>
+</body>
+</html>

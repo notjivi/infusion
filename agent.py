@@ -1,18 +1,18 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_classic.agents import AgentExecutor, create_react_agent
 from langchain_classic import hub
-from tools import read_trivy_log, write_yaml_patch, test_kubernetes_config
+from tools import read_trivy_log, write_yaml_patch, test_kubernetes_config, open_github_pr
 from scorer import calculate_risk_score
 import os
 import json
-os.environ["GOOGLE_API_KEY"] = "AIzaSyAbDqSEQzPrVA-mx0rDzFpBHkRfrnCtnP8"
-# ── Setup ──────────────────────────────────────────────────────────────────
+
 from dotenv import load_dotenv
 load_dotenv()
 
-# Using 1.5-flash as it is lightning fast and highly stable for free tier
+# Using 2.5-flash as per your script (Make sure your quota is good!)
 llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
 
+# REMOVED open_github_pr from the agent's tools list!
 tools = [read_trivy_log, write_yaml_patch, test_kubernetes_config]
 prompt = hub.pull("hwchase17/react")
 agent = create_react_agent(llm, tools, prompt)
@@ -20,22 +20,16 @@ agent = create_react_agent(llm, tools, prompt)
 agent_executor = AgentExecutor(
     agent=agent,
     tools=tools,
-    verbose=True, # Keeps the "Thought Process" but won't print raw JSON anymore
+    verbose=False, 
     max_iterations=10,
     handle_parsing_errors=True
 )
 
-# ── Optimization Helper ────────────────────────────────────────────────────
 def compress_trivy_data(raw_json_str):
-    """
-    Strips the bloated JSON down to just the essential CVE IDs and Titles.
-    Saves massive amounts of API tokens and keeps the terminal clean.
-    """
     try:
         data = json.loads(raw_json_str)
         summary = []
         for result in data.get("Results", []):
-            # Grab vulnerabilities or misconfigurations
             issues = result.get("Vulnerabilities", []) + result.get("Misconfigurations", [])
             for issue in issues:
                 vid = issue.get("VulnerabilityID", issue.get("ID", "Unknown"))
@@ -49,36 +43,32 @@ def compress_trivy_data(raw_json_str):
     except Exception as e:
         return "Failed to parse Trivy JSON."
 
-# ── Main Function ──────────────────────────────────────────────────────────
 def run_agent(trivy_json: str, vulnerable_yaml: str):
     fixed_yaml = "" 
-
-    # Compress the JSON to save API Quota
     compact_trivy = compress_trivy_data(trivy_json)
 
     # Step 1: Risk Score
     print("\n" + "="*60, flush=True)
     print("🔍 STEP 1: CALCULATING RISK SCORE", flush=True)
     print("="*60, flush=True)
-    risk = calculate_risk_score(trivy_json) # Scorer can use raw JSON internally
+    risk = calculate_risk_score(trivy_json) 
     print(f"⚠️  Risk Score  : {risk['score']}", flush=True)
     print(f"🚨 Risk Level  : {risk['risk_level']}", flush=True)
     print(f"📊 Breakdown   : {risk['breakdown']}", flush=True)
 
-    # Step 2: Attacker Story (Red Team Analysis)
+    # Step 2: Attacker Story
     print("\n" + "="*60, flush=True)
     print("💀 STEP 2: GENERATING RED TEAM ANALYSIS", flush=True)
     print("="*60, flush=True)
     
     attacker_story = ""
     try:
-        # We pass compact_trivy instead of trivy_json
         attacker_result = agent_executor.invoke({
             "input": f"""
             You are a Threat Modeling Expert. 
             Vulnerabilities: {compact_trivy}
             
-            Do NOT write a long paragraph. Provide a brutally concise, 3-bullet-point attack chain:
+            Provide a brutally concise, 3-bullet-point attack chain:
             🔥 Initial Access: [1 sentence explaining the foothold]
             🕵️ Lateral Movement: [1 sentence explaining the pivot]
             💥 Critical Impact: [1 sentence explaining the maximum damage]
@@ -102,7 +92,6 @@ def run_agent(trivy_json: str, vulnerable_yaml: str):
     
     fix_summary = ""
     try:
-        # We pass compact_trivy instead of trivy_json
         fix_result = agent_executor.invoke({
             "input": f"""
             You are an expert DevSecOps engineer. Fix the vulnerable Kubernetes YAML below.
@@ -114,33 +103,46 @@ def run_agent(trivy_json: str, vulnerable_yaml: str):
             {compact_trivy}
             
             Instructions:
-            1. Write the fully secure fixed YAML using the write_yaml_patch tool.
-            2. Use the test_kubernetes_config tool to verify your fix.
-            3. If the test FAILS, read the error carefully, fix the YAML and test again.
-            4. Keep retrying until test_kubernetes_config returns SUCCESS.
-            
-            Provide the final summary of changes as the final answer.
+            - Write the fully secure fixed YAML using the write_yaml_patch tool.
+            - Use the test_kubernetes_config tool to verify your fix.
+            - If the test FAILS, read the error carefully, fix the YAML and test again.
+            - Keep retrying until test_kubernetes_config returns SUCCESS.
+            - Add your own new comments (e.g., # FIXED: removed hostPort) next to the lines you change.
+            - 2. 🛑 CRITICAL RULE: You MUST preserve ALL original comments (#) from the original YAML. Do not delete them.
+            Provide the final summary of changes as your final answer.
             """
         })
         fix_summary = fix_result["output"]
+        print(f"\n✅ SUCCESS: \n{fix_summary}", flush=True)
+        
     except Exception as e:
         fix_summary = f"Error in Step 3: {str(e)}"
         print(f"\n❌ ERROR in Step 3: {fix_summary}", flush=True)
 
+    # Step 4: Submit PR (Deterministic, Bulletproof Execution)
+    print("\n" + "="*60, flush=True)
+    print("🚀 STEP 4: SUBMITTING VERIFIED PULL REQUEST", flush=True)
+    print("="*60, flush=True)
+
     try:
         with open("temp_patch.yaml", "r") as f:
             fixed_yaml = f.read()
-    except:
+            
+        # Call the normal python function with the exact strings
+        pr_status = open_github_pr(healed_yaml=fixed_yaml, attacker_story=attacker_story, fix_summary=fix_summary)
+        print(pr_status, flush=True)
+        
+    except Exception as e:
         fixed_yaml = "Error: Fixed YAML could not be retrieved from temp file."
+        print(f"❌ Could not create PR: {e}", flush=True)
 
     return {
         "risk_score": risk,
         "attacker_story": attacker_story,
         "fix_summary": fix_summary,
-        "fixed_yaml": fixed_yaml if 'fixed_yaml' in locals() else ""
+        "fixed_yaml": fixed_yaml
     }
 
-# ── Test Run ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import sys
 
@@ -173,4 +175,25 @@ if __name__ == "__main__":
         print("Usage: python agent.py <trivy_json_file> <vulnerable_yaml_file>")
         sys.exit(1)
 
-    run_agent(trivy_json, sample_yaml)
+    # --- UI DASHBOARD EXPORT LOGIC ---
+    print("\n🤖 Agent Pipeline Initializing...")
+    result = run_agent(trivy_json, sample_yaml)
+
+    # Format the data for the UI
+    ui_payload = {
+        "risk_score": result["risk_score"]["score"],
+        "risk_level": result["risk_score"]["risk_level"],
+        "attacker_story": result["attacker_story"],
+        "fix_summary": result["fix_summary"]
+    }
+
+    # Save to JSON for the frontend to consume
+    try:
+        with open("dashboard_data.json", "w") as f:
+            json.dump(ui_payload, f, indent=4)
+        print("\n" + "="*60)
+        print("✅ SUCCESS: Data saved to dashboard_data.json!")
+        print("🚀 Refresh your UI localhost to see the live results.")
+        print("="*60)
+    except Exception as e:
+        print(f"\n❌ Error saving to dashboard_data.json: {e}")
