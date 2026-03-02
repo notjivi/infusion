@@ -1,0 +1,12 @@
+# API Keys - never push these 
+.env 
+
+# Python 
+__pycache__/ 
+*.pyc 
+*.pyo 
+.venv/ 
+venv/ 
+
+# Temp files 
+temp_patch.yaml
