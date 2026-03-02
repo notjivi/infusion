@@ -1,43 +1,66 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain import hub
+from langchain_classic.agents import AgentExecutor, create_react_agent
+from langchain_classic import hub
 from tools import read_trivy_log, write_yaml_patch, test_kubernetes_config
 from scorer import calculate_risk_score
 import os
 import json
-
+os.environ["GOOGLE_API_KEY"] = "AIzaSyAbDqSEQzPrVA-mx0rDzFpBHkRfrnCtnP8"
 # ── Setup ──────────────────────────────────────────────────────────────────
 from dotenv import load_dotenv
 load_dotenv()
 
-# Use a stable model that has quota on the free tier
+# Using 1.5-flash as it is lightning fast and highly stable for free tier
 llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
-# llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0)
-# llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
 
 tools = [read_trivy_log, write_yaml_patch, test_kubernetes_config]
-
 prompt = hub.pull("hwchase17/react")
-
 agent = create_react_agent(llm, tools, prompt)
 
 agent_executor = AgentExecutor(
     agent=agent,
     tools=tools,
-    verbose=True,
+    verbose=True, # Keeps the "Thought Process" but won't print raw JSON anymore
     max_iterations=10,
     handle_parsing_errors=True
 )
 
+# ── Optimization Helper ────────────────────────────────────────────────────
+def compress_trivy_data(raw_json_str):
+    """
+    Strips the bloated JSON down to just the essential CVE IDs and Titles.
+    Saves massive amounts of API tokens and keeps the terminal clean.
+    """
+    try:
+        data = json.loads(raw_json_str)
+        summary = []
+        for result in data.get("Results", []):
+            # Grab vulnerabilities or misconfigurations
+            issues = result.get("Vulnerabilities", []) + result.get("Misconfigurations", [])
+            for issue in issues:
+                vid = issue.get("VulnerabilityID", issue.get("ID", "Unknown"))
+                sev = issue.get("Severity", "Unknown")
+                title = issue.get("Title", issue.get("Description", "No Title"))
+                summary.append(f"- [{sev}] {vid}: {title}")
+        
+        if not summary:
+            return "No vulnerabilities found."
+        return "\n".join(summary)
+    except Exception as e:
+        return "Failed to parse Trivy JSON."
+
 # ── Main Function ──────────────────────────────────────────────────────────
 def run_agent(trivy_json: str, vulnerable_yaml: str):
-    fixed_yaml = "" # Initialize early to avoid UnboundLocalError
+    fixed_yaml = "" 
+
+    # Compress the JSON to save API Quota
+    compact_trivy = compress_trivy_data(trivy_json)
 
     # Step 1: Risk Score
     print("\n" + "="*60, flush=True)
     print("🔍 STEP 1: CALCULATING RISK SCORE", flush=True)
     print("="*60, flush=True)
-    risk = calculate_risk_score(trivy_json)
+    risk = calculate_risk_score(trivy_json) # Scorer can use raw JSON internally
     print(f"⚠️  Risk Score  : {risk['score']}", flush=True)
     print(f"🚨 Risk Level  : {risk['risk_level']}", flush=True)
     print(f"📊 Breakdown   : {risk['breakdown']}", flush=True)
@@ -49,21 +72,18 @@ def run_agent(trivy_json: str, vulnerable_yaml: str):
     
     attacker_story = ""
     try:
+        # We pass compact_trivy instead of trivy_json
         attacker_result = agent_executor.invoke({
             "input": f"""
-            You are a Threat Modeling Expert performing a red-team analysis. 
-            Analyze the following vulnerabilities from a technical perspective and explain the hypothetical exploitation path an attacker might take.
+            You are a Threat Modeling Expert. 
+            Vulnerabilities: {compact_trivy}
             
-            Vulnerabilities found:
-            {trivy_json}
+            Do NOT write a long paragraph. Provide a brutally concise, 3-bullet-point attack chain:
+            🔥 Initial Access: [1 sentence explaining the foothold]
+            🕵️ Lateral Movement: [1 sentence explaining the pivot]
+            💥 Critical Impact: [1 sentence explaining the maximum damage]
             
-            Explain the scenario step by step:
-            1. Entry point: Which vulnerability provides the initial foothold and why?
-            2. Lateral movement: How would an attacker move from the initial entry to further compromise the system?
-            3. Impact: What is the maximum damage (data loss, persistence, breakout) this specific combination allows?
-            
-            Use read_trivy_log tool first to understand the vulnerabilities.
-            Provide your analysis as the final answer.
+            Output ONLY those three bullet points.
             """
         })
         attacker_story = attacker_result["output"]
@@ -82,6 +102,7 @@ def run_agent(trivy_json: str, vulnerable_yaml: str):
     
     fix_summary = ""
     try:
+        # We pass compact_trivy instead of trivy_json
         fix_result = agent_executor.invoke({
             "input": f"""
             You are an expert DevSecOps engineer. Fix the vulnerable Kubernetes YAML below.
@@ -89,17 +110,16 @@ def run_agent(trivy_json: str, vulnerable_yaml: str):
             Vulnerable YAML:
             {vulnerable_yaml}
             
-            Vulnerabilities to fix:
-            {trivy_json}
+            Security Issues to fix:
+            {compact_trivy}
             
             Instructions:
-            1. Use read_trivy_log to understand what needs fixing
-            2. Write the fully secure fixed YAML using write_yaml_patch
-            3. Use test_kubernetes_config to verify your fix
-            4. If the test FAILS, read the error carefully, fix the YAML and test again
-            5. Keep retrying until test_kubernetes_config returns SUCCESS
+            1. Write the fully secure fixed YAML using the write_yaml_patch tool.
+            2. Use the test_kubernetes_config tool to verify your fix.
+            3. If the test FAILS, read the error carefully, fix the YAML and test again.
+            4. Keep retrying until test_kubernetes_config returns SUCCESS.
             
-            Provide the final summary of changes and the verification status as the final answer.
+            Provide the final summary of changes as the final answer.
             """
         })
         fix_summary = fix_result["output"]
@@ -107,7 +127,6 @@ def run_agent(trivy_json: str, vulnerable_yaml: str):
         fix_summary = f"Error in Step 3: {str(e)}"
         print(f"\n❌ ERROR in Step 3: {fix_summary}", flush=True)
 
-    # Try to read the fixed YAML from the temp file if it exists
     try:
         with open("temp_patch.yaml", "r") as f:
             fixed_yaml = f.read()
@@ -121,14 +140,10 @@ def run_agent(trivy_json: str, vulnerable_yaml: str):
         "fixed_yaml": fixed_yaml if 'fixed_yaml' in locals() else ""
     }
 
-
 # ── Test Run ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import sys
 
-    # Automatically read JSON file from command line argument
-    # Usage: python agent.py cluster.json vulnerable.yaml
-    
     if len(sys.argv) >= 2:
         json_file = sys.argv[1]
         try:
