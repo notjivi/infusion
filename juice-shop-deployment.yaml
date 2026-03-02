@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: juice-shop
+  labels:
+    app: juice-shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: juice-shop
+  template:
+    metadata:
+      labels:
+        app: juice-shop
+    spec:
+      containers:
+      - name: juice-shop
+        image: bkimminich/juice-shop:v12.0.0  # Old vulnerable version
+        ports:
+        - containerPort: 3000
+
+        # VULNERABILITY 1: Run as root
+        securityContext:
+          runAsUser: 0
+          privileged: true
+          allowPrivilegeEscalation: true
+          readOnlyRootFilesystem: false
+
+        # VULNERABILITY 2: Hardcoded secrets
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: DB_PASSWORD
+          value: "SuperSecret123"
+        - name: STRIPE_API_KEY
+          value: "sk_test_ThisIsFakeButLooksReal"
+
+        # VULNERABILITY 3: No resource limits
+        resources: {}
+
+        # VULNERABILITY 4: No health probes
+        # (no livenessProbe / readinessProbe)
+
+        volumeMounts:
+        # VULNERABILITY 5: Host filesystem access
+        - name: host-root
+          mountPath: /host
+          readOnly: false
+
+      volumes:
+      - name: host-root
+        hostPath:
+          path: /
+          type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: juice-shop-service
+spec:
+  # VULNERABILITY 6: Public exposure
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 3000
+  selector:
+    app: juice-shop
