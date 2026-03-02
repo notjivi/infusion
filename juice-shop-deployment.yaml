@@ -1,7 +1,35 @@
+# Namespace (non-default to remove 'default namespace' low vuln)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: juice-ns
+---
+# ServiceAccount intentionally created — later bound to cluster-admin (this is one of the HIGH vulns we keep)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: juice-admin-sa
+  namespace: juice-ns
+---
+# ClusterRoleBinding: binds the above SA to cluster-admin (INTENTIONAL HIGH)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: juice-admin-sa-cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: juice-admin-sa
+    namespace: juice-ns
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: juice-shop
+  namespace: juice-ns
   labels:
     app: juice-shop
 spec:
@@ -14,52 +42,87 @@ spec:
       labels:
         app: juice-shop
     spec:
+      # INTENTIONAL: use the high-priv SA (this is one of the five HIGHs)
+      serviceAccountName: juice-admin-sa
+
+      # Pod-level security context: we set sensible defaults to fix many low/medium issues
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+
       containers:
       - name: juice-shop
-        image: bkimminich/juice-shop:v12.0.0  # Old vulnerable version
+        image: bkimminich/juice-shop:v12.0.0    # still an old vulnerable image (medium), but not counted among HIGHs here
         ports:
         - containerPort: 3000
+          # INTENTIONAL HIGH: binds to host port 80 (privileged host port binding)
+          hostPort: 80
 
-        # VULNERABILITY 1: Run as root
+        # Strong container security contexts to mitigate most other checks
         securityContext:
-          runAsUser: 0
-          privileged: true
-          allowPrivilegeEscalation: true
-          readOnlyRootFilesystem: false
+          privileged: false
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 10001
+          capabilities:
+            drop: ["ALL"]
+            add: ["NET_BIND_SERVICE"]
 
-        # VULNERABILITY 2: Hardcoded secrets
+        # INTENTIONAL HIGH: hardcoded secret (one of the 5 HIGH vulnerabilities we keep)
         env:
         - name: NODE_ENV
           value: "production"
         - name: DB_PASSWORD
-          value: "SuperSecret123"
+          value: "SuperSecret123"             # deliberately kept as a demo bad secret
         - name: STRIPE_API_KEY
           value: "sk_test_ThisIsFakeButLooksReal"
 
-        # VULNERABILITY 3: No resource limits
-        resources: {}
+        # Fixed: resources defined (prevents DoS low/medium)
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
 
-        # VULNERABILITY 4: No health probes
-        # (no livenessProbe / readinessProbe)
+        # Fixed: add simple probes (fixes the no-probe vulnerability)
+        readinessProbe:
+          httpGet:
+            path: /#/login
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+
+        livenessProbe:
+          httpGet:
+            path: /#/login
+            port: 3000
+          initialDelaySeconds: 20
+          periodSeconds: 20
 
         volumeMounts:
-        # VULNERABILITY 5: Host filesystem access
         - name: host-root
           mountPath: /host
-          readOnly: false
+          readOnly: false   # INTENTIONAL HIGH: hostPath mount writable (kept as a HIGH vulnerability)
 
+      # FIXED: removed empty resources for other containers, ensured seccomp profile set at pod level
       volumes:
       - name: host-root
         hostPath:
-          path: /
+          path: /        # INTENTIONAL HIGH: mounting host root (extremely dangerous)
           type: Directory
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: juice-shop-service
+  namespace: juice-ns
 spec:
-  # VULNERABILITY 6: Public exposure
+  # INTENTIONAL HIGH: exposes the app to the internet (one of the 5 HIGH vulnerabilities)
   type: LoadBalancer
   ports:
   - port: 80
