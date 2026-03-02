@@ -11,19 +11,26 @@ def read_trivy_log(vulnerability_json: str) -> str:
     Output: human readable summary of vulnerabilities
     """
     try:
-        data = json.loads(vulnerability_json)
+        # Handle both string and dict input
+        if isinstance(vulnerability_json, str):
+            # Strip any extra whitespace
+            vulnerability_json = vulnerability_json.strip()
+            data = json.loads(vulnerability_json)
+        else:
+            data = vulnerability_json
+
         summary = []
 
         for result in data.get("Results", []):
             target = result.get("Target", "unknown")
-            vulns = result.get("Vulnerabilities", [])
-
-            for vuln in vulns:
+            
+            # Handle Misconfigurations (real Trivy data)
+            items = result.get("Misconfigurations", []) + result.get("Vulnerabilities", [])
+            
+            for item in items:
                 summary.append(
-                    f"Target: {target} | "
-                    f"ID: {vuln.get('VulnerabilityID')} | "
-                    f"Severity: {vuln.get('Severity')} | "
-                    f"Title: {vuln.get('Title')}"
+                    f"[{item.get('Severity', 'UNKNOWN')}] {item.get('ID', 'N/A')} - "
+                    f"{item.get('Title', 'No title')} | Fix: {item.get('Resolution', 'N/A')}"
                 )
 
         return "\n".join(summary) if summary else "No vulnerabilities found."

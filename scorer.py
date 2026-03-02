@@ -2,20 +2,23 @@ import json
 
 def calculate_risk_score(trivy_json: str) -> dict:
     try:
-        data = json.loads(trivy_json)
+        data = json.loads(trivy_json) if isinstance(trivy_json, str) else trivy_json
     except json.JSONDecodeError as e:
         return {
             "score": 0,
             "breakdown": {"critical": 0, "high": 0, "medium": 0, "low": 0},
             "risk_level": "UNKNOWN",
-            "error": f"Invalid JSON from Trivy: {str(e)}"
+            "error": f"Invalid JSON: {str(e)}"
         }
 
     critical = high = medium = low = 0
 
     for result in data.get("Results", []):
-        for vuln in result.get("Vulnerabilities", []):
-            severity = vuln.get("Severity", "").upper()
+        # Handle both Vulnerabilities and Misconfigurations
+        items = result.get("Vulnerabilities", []) + result.get("Misconfigurations", [])
+        
+        for item in items:
+            severity = item.get("Severity", "").upper()
             if severity == "CRITICAL":
                 critical += 1
             elif severity == "HIGH":
