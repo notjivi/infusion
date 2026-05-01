@@ -127,4 +127,3 @@ The agent automatically generates a `dashboard_data.json` file. To view the live
 
 ---
 
-*Built with ❤️ by notjivi.*
