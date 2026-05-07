@@ -1,4 +1,4 @@
-# 🛡️ Infusion (Aegis Sentinel) 
+# 🛡️ HealNexus
 **Autonomous DevSecOps & K8s Auto-Remediation Agent**
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
@@ -6,13 +6,13 @@
 [![Gemini](https://img.shields.io/badge/Gemini-2.5_Flash-orange)](https://deepmind.google/technologies/gemini/)
 [![Kubernetes](https://img.shields.io/badge/kubernetes-%23326ce5.svg?logo=kubernetes&logoColor=white)](https://kubernetes.io/)
 
-**Infusion** is an autonomous DevSecOps pipeline. It doesn't just alert you to vulnerabilities—it **understands them, fixes them, tests the fixes, and submits a Pull Request** completely autonomously.
+**HealNexus** is an autonomous DevSecOps pipeline. It doesn't just alert you to vulnerabilities—it **understands them, fixes them, tests the fixes, and submits a Pull Request** completely autonomously.
 
 ---
 
 ## 🌟 What It Does
 
-Infusion ingests Kubernetes manifest files and their corresponding [Trivy](https://trivy.dev/) vulnerability scan reports. Using Google's **Gemini 2.5 Flash** and **LangChain**, it creates an autonomous agent that acts as a Senior Security Engineer:
+Healexus ingests Kubernetes manifest files and their corresponding [Trivy](https://trivy.dev/) vulnerability scan reports. Using Google's **Gemini 2.5 Flash** and **LangChain**, it creates an autonomous agent that acts as a Senior Security Engineer:
 
 1. **Calculates Risk:** Parses the Trivy JSON to compute a custom risk score and threat level.
 2. **Threat Modeling:** Generates a concise Red Team "Attacker Story" outlining how a threat actor could exploit the found vulnerabilities (Initial Access -> Lateral Movement -> Critical Impact).
