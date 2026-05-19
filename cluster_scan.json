@@ -14,7 +14,7 @@
       "Type": "kubernetes",
       "MisconfSummary": {
         "Successes": 103,
-        "Failures": 7
+        
       },
       "Misconfigurations": [
         {
